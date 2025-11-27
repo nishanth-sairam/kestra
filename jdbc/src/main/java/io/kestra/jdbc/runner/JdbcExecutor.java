@@ -296,10 +296,25 @@ public class JdbcExecutor implements ExecutorInterface {
         this.receiveCancellations.addFirst(((JdbcQueue<Execution>) this.executionQueue).receiveBatch(
             Executor.class,
             executions -> {
-                List<CompletableFuture<Void>> futures = executions.stream()
-                    .map(execution -> CompletableFuture.runAsync(() -> executionQueue(execution), executionExecutorService))
+                List<CompletableFuture<Void>> exceptionHandlingFutures = executions.stream()
+                    .filter(Either::isRight)
+                    .map(either -> CompletableFuture.runAsync(() ->  executionQueue(either), executionExecutorService))
                     .toList();
-                CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+
+                List<CompletableFuture<Void>> perExecutionFutures = executions.stream()
+                    .filter(Either::isLeft)
+                    .collect(Collectors.groupingBy(either -> either.getLeft().getId()))
+                    .values()
+                    .stream()
+                    .map(eithers -> CompletableFuture.runAsync(() -> {
+                        eithers.forEach(this::executionQueue);
+                    }, executionExecutorService))
+                    .toList();
+
+                CompletableFuture.allOf(Stream.concat(
+                    perExecutionFutures.stream(),
+                    exceptionHandlingFutures.stream()
+                ).toArray(CompletableFuture[]::new)).join();
             }
         ));
         this.receiveCancellations.addFirst(((JdbcQueue<WorkerTaskResult>) this.workerTaskResultQueue).receiveBatch(
