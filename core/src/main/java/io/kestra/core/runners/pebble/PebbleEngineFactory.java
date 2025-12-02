@@ -8,6 +8,7 @@ import io.micronaut.core.annotation.Nullable;
 import io.pebbletemplates.pebble.PebbleEngine;
 import io.pebbletemplates.pebble.extension.Extension;
 import io.pebbletemplates.pebble.extension.Function;
+import io.pebbletemplates.pebble.lexer.Syntax;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 
@@ -33,6 +34,12 @@ public class PebbleEngineFactory {
 
     public PebbleEngine create() {
         PebbleEngine.Builder builder = newPebbleEngineBuilder();
+        this.applicationContext.getBeansOfType(Extension.class).forEach(builder::extension);
+        return builder.build();
+    }
+
+    public PebbleEngine createWithCustomSyntax(Syntax syntax) {
+        PebbleEngine.Builder builder = newPebbleEngineBuilder().syntax(syntax);
         this.applicationContext.getBeansOfType(Extension.class).forEach(builder::extension);
         return builder.build();
     }
