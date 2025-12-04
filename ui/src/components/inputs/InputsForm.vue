@@ -564,6 +564,16 @@
 
                     metadataCallback(data);
                 } else {
+
+                    // TODO remove
+                    const iii  ={inputs: this.inputsMetaData.map(i => {
+                        const x = i as object;
+                        return {input: x, enabled: true}; })
+                    };
+                    console.log("metadataCallback", iii)
+                    metadataCallback(iii);
+                    // TODO end remove
+
                     this.$emit("validation", {
                         formData: formData,
                         callback: (response) => {
