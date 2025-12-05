@@ -290,7 +290,10 @@ subprojects {subProj ->
         }
 
         // Unit test task (default)
-        tasks.register('unitTest', Test) { Test t ->
+        tasks.named('test', Test) { Test t ->
+            group = 'verification'
+            description = 'Runs unit tests.'
+
             useJUnitPlatform {
                 excludeTags 'flaky', 'integration'
             }
@@ -301,8 +304,8 @@ subprojects {subProj ->
                 junitXml.includeSystemErrLog = true
                 junitXml.outputLocation = layout.buildDirectory.dir("test-results/test")
             }
-
             commonTestConfig(t)
+            jvmArgs = ["-javaagent:${configurations.agent.singleFile}"]
 
             // JUnit 5 parallel settings - CLI module does assertions on stout (mostly).
             if (subProj.name != 'cli') {
@@ -312,15 +315,10 @@ subprojects {subProj ->
             }
         }
 
-        test {
-            jvmArgs = ["-javaagent:${configurations.agent.singleFile}"]
-            dependsOn(tasks.named('unitTest'))
-            dependsOn(tasks.named('integrationTest'))
-            dependsOn(tasks.named('flakyTest'))
-        }
-
         tasks.named('check') {
             dependsOn(tasks.named('test'))// default behaviour
+            dependsOn(tasks.named('integrationTest'))
+            dependsOn(tasks.named('flakyTest'))
             finalizedBy jacocoTestReport
         }
 
