@@ -232,6 +232,30 @@ subprojects {subProj ->
 //            }
         }
 
+        tasks.register('integrationTest', Test) { Test t ->
+            description = 'Runs integration tests'
+            group = 'verification'
+
+            useJUnitPlatform {
+                includeTags 'integration'
+            }
+
+            testClassesDirs = sourceSets.test.output.classesDirs
+            classpath = sourceSets.test.runtimeClasspath
+
+            reports {
+                junitXml.required = true
+                junitXml.outputPerTestCase = true
+                junitXml.mergeReruns = true
+                junitXml.includeSystemErrLog = true
+                junitXml.outputLocation = layout.buildDirectory.dir("test-results/integrationTest")
+            }
+            
+            // Integration tests typically not parallel (but you can enable)
+            maxParallelForks = 1
+            commonTestConfig(t)
+        }
+        
         tasks.register('flakyTest', Test) { Test t ->
             group = 'verification'
             description = 'Runs tests tagged @Flaky but does not fail the build.'
@@ -249,12 +273,12 @@ subprojects {subProj ->
                 junitXml.outputLocation = layout.buildDirectory.dir("test-results/flakyTest")
             }
             commonTestConfig(t)
-
         }
 
-        test {
+        // Unit test task (default)
+        tasks.register('unitTest', Test) { Test t ->
             useJUnitPlatform {
-                excludeTags 'flaky'
+                excludeTags 'flaky', 'integration'
             }
             reports {
                 junitXml.required = true
@@ -263,10 +287,19 @@ subprojects {subProj ->
                 junitXml.includeSystemErrLog = true
                 junitXml.outputLocation = layout.buildDirectory.dir("test-results/test")
             }
-            commonTestConfig(it)
+            
+            commonTestConfig(t)
 
-
-            finalizedBy(tasks.named('flakyTest'))
+            // JUnit 5 parallel settings - CLI module does assertions on stout (mostly).
+            if (subProj.name != 'cli') {
+                systemProperty("junit.jupiter.execution.parallel.enabled", "true")
+                systemProperty("junit.jupiter.execution.parallel.mode.default", "concurrent")
+                systemProperty("junit.jupiter.execution.parallel.mode.classes.default", "concurrent")
+            }
+        }
+        
+        test {
+            finalizedBy(tasks.named('unitTest'), tasks.named('integrationTest'), tasks.named('flakyTest'))
         }
 
         testlogger {
@@ -347,7 +380,7 @@ subprojects {
     if (it.name != 'platform' && it.name != 'jmh-benchmarks') {
         apply plugin: 'jacoco'
 
-        test {
+        check {
             finalizedBy jacocoTestReport
         }
 
