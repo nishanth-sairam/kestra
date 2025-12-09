@@ -95,6 +95,21 @@ export const useBlueprintsStore = defineStore("blueprints", () => {
         return response.data;
     };
 
+    const createFlowBlueprint = async (toCreate: {source: string, title: string, description: string, tags: string[]}) => {
+        const url = `${apiUrl()}/blueprints/flows`;
+        const body = {
+            ...toCreate
+        }
+        const response = await axios.post(url, body);
+
+        return response.data;
+    };
+
+    const deleteFlowBlueprint = async (idToDelete: string) => {
+        const url = `${apiUrl()}/blueprints/custom/${idToDelete}`;
+        await axios.delete(url);
+    };
+
     const previewTemplatedBlueprint = async (source: string) => {
         const url = `${apiUrl()}/blueprints/custom/preview`;
         const body = {
@@ -128,6 +143,8 @@ export const useBlueprintsStore = defineStore("blueprints", () => {
         getBlueprintGraph,
         getBlueprintTags,
         previewTemplatedBlueprint,
-        simulateUseInternalTemplatedBlueprints
+        simulateUseInternalTemplatedBlueprints,
+        createFlowBlueprint,
+        deleteFlowBlueprint
     };
 });
