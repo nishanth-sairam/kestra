@@ -38,9 +38,10 @@ public class PebbleEngineFactory {
         return builder.build();
     }
 
-    public PebbleEngine createWithCustomSyntax(Syntax syntax) {
-        PebbleEngine.Builder builder = newPebbleEngineBuilder().syntax(syntax);
-        this.applicationContext.getBeansOfType(Extension.class).forEach(builder::extension);
+    public PebbleEngine createWithCustomSyntax(Syntax syntax, Class<? extends Extension> extension) {
+        PebbleEngine.Builder builder = newPebbleEngineBuilder()
+            .syntax(syntax);
+        this.applicationContext.getBeansOfType(extension).forEach(builder::extension);
         return builder.build();
     }
 
