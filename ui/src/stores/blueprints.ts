@@ -106,7 +106,7 @@ export const useBlueprintsStore = defineStore("blueprints", () => {
     };
 
     const deleteFlowBlueprint = async (idToDelete: string) => {
-        const url = `${apiUrl()}/blueprints/custom/${idToDelete}`;
+        const url = `${apiUrl()}/blueprints/flows/${idToDelete}`;
         await axios.delete(url);
     };
 
