@@ -95,12 +95,43 @@ export const useBlueprintsStore = defineStore("blueprints", () => {
         return response.data;
     };
 
-    const createFlowBlueprint = async (toCreate: {source: string, title: string, description: string, tags: string[]}) => {
+    interface FlowBlueprint {
+        id: string,
+        source: string,
+        title: string,
+        description: string,
+        tags: string[]
+    }
+
+    const getFlowBlueprint = async (id: string) => {
+        const url = `${apiUrl()}/blueprints/flow/${id}`;
+
+        const response = await axios.get(url);
+
+        if (response.data?.id) {
+            trackBlueprintSelection(response.data.id);
+        }
+
+        blueprint.value = response.data;
+        return response.data;
+    };
+
+    const createFlowBlueprint = async (toCreate: {source: string, title: string, description: string, tags: string[]}): Promise<FlowBlueprint> => {
         const url = `${apiUrl()}/blueprints/flows`;
         const body = {
             ...toCreate
         }
         const response = await axios.post(url, body);
+
+        return response.data;
+    };
+
+    const updateFlowBlueprint = async (id: string, toUpdate: {source: string, title: string, description: string, tags: string[]}) :Promise<FlowBlueprint> => {
+        const url = `${apiUrl()}/blueprints/flows/${id}`;
+        const body = {
+            ...toUpdate
+        }
+        const response = await axios.put(url, body);
 
         return response.data;
     };
@@ -144,7 +175,9 @@ export const useBlueprintsStore = defineStore("blueprints", () => {
         getBlueprintTags,
         previewTemplatedBlueprint,
         simulateUseInternalTemplatedBlueprints,
+        getFlowBlueprint,
         createFlowBlueprint,
-        deleteFlowBlueprint
+        updateFlowBlueprint,
+        deleteFlowBlueprint,
     };
 });
