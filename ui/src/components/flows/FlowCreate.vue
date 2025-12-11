@@ -33,12 +33,15 @@
     const setupFlow = async () => {
         const blueprintId = route.query.blueprintId as string;
         const blueprintSource = route.query.blueprintSource as BlueprintType;
+        const blueprintSourceYaml = route.query.blueprintSourceYaml as string;// TODO find a better naming
         let flowYaml = "";
         const id = getRandomID();
         const selectedNamespace = (route.query.namespace as string) || defaultNamespace() || "company.team";
 
         if (route.query.copy && flowStore.flow) {
             flowYaml = flowStore.flow.source;
+        } else if (blueprintId && blueprintSourceYaml) {
+            flowYaml = blueprintSourceYaml;
         } else if (blueprintId && blueprintSource) {
             flowYaml = await blueprintsStore.getBlueprintSource({
                 type: blueprintSource,
