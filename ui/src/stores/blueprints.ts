@@ -24,6 +24,28 @@ interface Blueprint {
     [key: string]: any;
 }
 
+export interface TemplateArgument {
+    id: string,
+    displayName: string,
+    type: string,
+    itemType?: string,
+    required: boolean,
+    defaults?: any
+}
+export interface FlowBlueprint {
+    id: string,
+    title: string,
+    description: string,
+    includedTasks: string[],
+    tags: string[],
+    source: string,
+    publishedAt: string,
+    template: {
+        source:string,
+        templateArguments: Record<string, TemplateArgument>
+    }
+}
+
 const API_URL = "https://api.kestra.io/v1";
 const VALIDATE = {validateStatus: (status: number) => status === 200 || status === 401};
 
@@ -95,15 +117,7 @@ export const useBlueprintsStore = defineStore("blueprints", () => {
         return response.data;
     };
 
-    interface FlowBlueprint {
-        id: string,
-        source: string,
-        title: string,
-        description: string,
-        tags: string[]
-    }
-
-    const getFlowBlueprint = async (id: string) => {
+    const getFlowBlueprint = async (id: string): Promise<FlowBlueprint> => {
         const url = `${apiUrl()}/blueprints/flow/${id}`;
 
         const response = await axios.get(url);
@@ -141,6 +155,16 @@ export const useBlueprintsStore = defineStore("blueprints", () => {
         await axios.delete(url);
     };
 
+    const useFlowBlueprintTemplate = async (id: string, inputs: Record<string, object>): Promise<{generatedFlowSource: string}> => {
+        const url = `${apiUrl()}/blueprints/flows/${id}/use-template`;
+        const body = {
+            templateArgumentsInputs: inputs
+        }
+        const response = await axios.post(url, body);
+
+        return response.data;
+    }
+
     const previewTemplatedBlueprint = async (source: string) => {
         const url = `${apiUrl()}/blueprints/custom/preview`;
         const body = {
@@ -173,6 +197,7 @@ export const useBlueprintsStore = defineStore("blueprints", () => {
         getBlueprintSource,
         getBlueprintGraph,
         getBlueprintTags,
+        useFlowBlueprintTemplate,
         previewTemplatedBlueprint,
         simulateUseInternalTemplatedBlueprints,
         getFlowBlueprint,

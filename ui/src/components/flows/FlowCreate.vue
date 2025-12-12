@@ -32,7 +32,6 @@
 
     const setupFlow = async () => {
         const blueprintId = route.query.blueprintId as string;
-        const blueprintSource = route.query.blueprintSource as BlueprintType;
         const blueprintSourceYaml = route.query.blueprintSourceYaml as string;// TODO find a better naming
         let flowYaml = "";
         const id = getRandomID();
@@ -42,12 +41,9 @@
             flowYaml = flowStore.flow.source;
         } else if (blueprintId && blueprintSourceYaml) {
             flowYaml = blueprintSourceYaml;
-        } else if (blueprintId && blueprintSource) {
-            flowYaml = await blueprintsStore.getBlueprintSource({
-                type: blueprintSource,
-                kind: "flow",
-                id: blueprintId
-            });
+        } else if (blueprintId) {
+            const flowBlueprint = await blueprintsStore.getFlowBlueprint(blueprintId);
+            flowYaml = flowBlueprint.source;
         } else {
             flowYaml = `
 id: ${id}
