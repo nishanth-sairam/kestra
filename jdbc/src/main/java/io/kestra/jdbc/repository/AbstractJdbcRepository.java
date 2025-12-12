@@ -322,6 +322,11 @@ public abstract class AbstractJdbcRepository {
                 throw new InvalidQueryFiltersException("Label field value must be instance of Map or String");
             }
         }
+
+        if (field.equals(QueryFilter.Field.METADATA)) {
+            return findMetadataCondition((Map<?, ?>) value, operation);
+        }
+
         if (field == QueryFilter.Field.KIND) {
             return applyKindCondition(value,operation);
         }
@@ -353,6 +358,10 @@ public abstract class AbstractJdbcRepository {
     }
 
     protected Condition findLabelCondition(Either<Map<?, ?>, String> value, QueryFilter.Op operation) {
+        throw new InvalidQueryFiltersException("Unsupported operation: " + operation);
+    }
+
+    protected Condition findMetadataCondition(Map<?, ?> metadata, QueryFilter.Op operation) {
         throw new InvalidQueryFiltersException("Unsupported operation: " + operation);
     }
 

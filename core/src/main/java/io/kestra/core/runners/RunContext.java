@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.kestra.core.encryption.EncryptionService;
 import io.kestra.core.exceptions.IllegalVariableEvaluationException;
+import io.kestra.core.models.assets.Asset;
 import io.kestra.core.models.executions.AbstractMetricEntry;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.property.PropertyContext;
@@ -142,6 +143,8 @@ public abstract class RunContext implements PropertyContext {
     @Deprecated(forRemoval = true)
     public abstract String tenantId();
 
+    public abstract ExecutionInfo executionInfo();
+
     public abstract FlowInfo flowInfo();
 
     /**
@@ -189,6 +192,9 @@ public abstract class RunContext implements PropertyContext {
      */
     public abstract LocalPath localPath();
 
+    public record ExecutionInfo(String id, String taskRunId) {
+    }
+
     public record FlowInfo(String tenantId, String namespace, String id, Integer revision) {
     }
 
@@ -204,4 +210,9 @@ public abstract class RunContext implements PropertyContext {
      * when Namespace ACLs are used (EE).
      */
     public abstract AclChecker acl();
+
+    /**
+     * Get access to the Assets handler.
+     */
+    public abstract Assets assets();
 }

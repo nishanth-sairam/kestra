@@ -192,6 +192,9 @@ public class JdbcExecutor implements ExecutorInterface {
     @Inject
     private VariablesService variablesService;
 
+    @Inject
+    private AssetService assetService;
+
     @Value("${kestra.jdbc.executor.clean.execution-queue:true}")
     private boolean cleanExecutionQueue;
 
@@ -292,6 +295,8 @@ public class JdbcExecutor implements ExecutorInterface {
         flowListeners.listen(flows -> this.allFlows = flows);
 
         Await.until(() -> this.allFlows != null, Duration.ofMillis(100), Duration.ofMinutes(5));
+
+        this.receiveCancellations.addAll(assetService.eventListeners(Executor.class));
 
         this.receiveCancellations.addFirst(((JdbcQueue<Execution>) this.executionQueue).receiveBatch(
             Executor.class,

@@ -2,6 +2,9 @@ package io.kestra.core.models.executions;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.kestra.core.models.TenantInterface;
+import io.kestra.core.models.assets.Asset;
+import io.kestra.core.models.assets.AssetsDeclaration;
+import io.kestra.core.models.assets.AssetsInOut;
 import io.kestra.core.models.flows.State;
 import io.kestra.core.models.tasks.FlowableTask;
 import io.kestra.core.models.tasks.ResolvedTask;
@@ -59,6 +62,10 @@ public class TaskRun implements TenantInterface {
     @Schema(implementation = Object.class)
     Variables outputs;
 
+    @With
+    @Nullable
+    AssetsInOut assets;
+
     @NotNull
     State state;
 
@@ -89,6 +96,7 @@ public class TaskRun implements TenantInterface {
             this.value,
             this.attempts,
             this.outputs,
+            this.assets,
             this.state.withState(state),
             this.iteration,
             this.dynamic,
@@ -108,6 +116,7 @@ public class TaskRun implements TenantInterface {
             this.value,
             this.attempts,
             this.outputs,
+            this.assets,
             newState,
             this.iteration,
             this.dynamic,
@@ -131,6 +140,7 @@ public class TaskRun implements TenantInterface {
             this.value,
             newAttempts,
             this.outputs,
+            this.assets,
             this.state.withState(State.Type.FAILED),
             this.iteration,
             this.dynamic,
@@ -150,6 +160,7 @@ public class TaskRun implements TenantInterface {
             .value(this.getValue())
             .attempts(this.getAttempts())
             .outputs(this.getOutputs())
+            .assets(this.getAssets())
             .state(state == null ? this.getState() : state)
             .iteration(this.getIteration())
             .build();
@@ -236,6 +247,7 @@ public class TaskRun implements TenantInterface {
             ", parentTaskRunId=" + this.getParentTaskRunId() +
             ", state=" + this.getState().getCurrent().toString() +
             ", outputs=" + this.getOutputs() +
+            ", assets=" + this.getAssets() +
             ", attempts=" + this.getAttempts() +
             ")";
     }

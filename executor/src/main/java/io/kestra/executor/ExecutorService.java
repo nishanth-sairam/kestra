@@ -4,6 +4,10 @@ import io.kestra.core.debug.Breakpoint;
 import io.kestra.core.exceptions.InternalException;
 import io.kestra.core.metrics.MetricRegistry;
 import io.kestra.core.models.Label;
+import io.kestra.core.models.assets.AssetIdentifier;
+import io.kestra.core.models.assets.AssetUser;
+import io.kestra.core.models.assets.AssetsDeclaration;
+import io.kestra.core.models.assets.AssetsInOut;
 import io.kestra.core.models.executions.*;
 import io.kestra.core.models.flows.FlowInterface;
 import io.kestra.core.models.flows.FlowWithSource;
@@ -45,6 +49,7 @@ import java.util.*;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import static io.kestra.core.utils.Rethrow.throwConsumer;
 import static io.kestra.core.utils.Rethrow.throwFunction;
 
 @Singleton
@@ -95,6 +100,12 @@ public class ExecutorService {
     @Inject
     @Named(QueueFactoryInterface.WORKERTASKLOG_NAMED)
     private QueueInterface<LogEntry> logQueue;
+
+    @Inject
+    private AssetService assetService;
+
+    @Inject
+    private RunContextInitializer runContextInitializer;
 
     protected FlowMetaStoreInterface flowExecutorInterface() {
         // bean is injected late, so we need to wait
@@ -240,7 +251,12 @@ public class ExecutorService {
 
         if (parent instanceof FlowableTask<?> flowableParent) {
 
-            RunContext runContext = runContextFactory.of(flow, parent, execution, parentTaskRun);
+            RunContext runContext = runContextInitializer.forExecutor((DefaultRunContext) runContextFactory.of(
+                flow,
+                parent,
+                execution,
+                parentTaskRun
+            ));
 
             // first find the normal ended child tasks and send result
             Optional<State.Type> state;
@@ -283,6 +299,10 @@ public class ExecutorService {
                     return Optional.of(new WorkerTaskResult(workerTaskResult
                         .getTaskRun()
                         .withOutputs(variables)
+                        .withAssets(new AssetsInOut(
+                            Optional.ofNullable(parent.getAssets()).map(AssetsDeclaration::getInputs).orElse(Collections.emptyList()),
+                            runContext.assets().outputs()
+                        ))
                         .withAttempts(attempts)
                     ));
                 }
@@ -373,17 +393,20 @@ public class ExecutorService {
                     return taskRun;
                 }
                 FlowableTask<?> flowableTask = (FlowableTask<?>) t.getTask();
-                RunContext runContext = runContextFactory.of(
+                RunContext runContext = runContextInitializer.forExecutor((DefaultRunContext) runContextFactory.of(
                     executor.getFlow(),
                     t.getTask(),
                     executor.getExecution(),
                     t.getTaskRun()
-                );
+                ));
 
                 try {
                     Output outputs = flowableTask.outputs(runContext);
                     Variables variables = variablesService.of(StorageContext.forTask(taskRun), outputs);
-                    taskRun = taskRun.withOutputs(variables);
+                    taskRun = taskRun.withOutputs(variables).withAssets(new AssetsInOut(
+                        Optional.ofNullable(t.getTask().getAssets()).map(AssetsDeclaration::getInputs).orElse(Collections.emptyList()),
+                        runContext.assets().outputs()
+                    ));
 
                 } catch (Exception e) {
                     runContext.logger().warn("Unable to save output on taskRun '{}'", taskRun, e);
@@ -401,7 +424,10 @@ public class ExecutorService {
             .withState(executor.getExecution().guessFinalState(flow));
 
         if (flow.getOutputs() != null) {
-            RunContext runContext = runContextFactory.of(executor.getFlow(), executor.getExecution());
+            RunContext runContext = runContextInitializer.forExecutor((DefaultRunContext) runContextFactory.of(
+                executor.getFlow(),
+                executor.getExecution()
+            ));
 
             try {
                 Map<String, Object> outputs = FlowInputOutput.renderFlowOutputs(flow.getOutputs(), runContext);
@@ -570,9 +596,18 @@ public class ExecutorService {
                     Output newOutput = waitFor.outputs(taskRun);
                     Variables variables = variablesService.of(StorageContext.forTask(taskRun), newOutput);
                     TaskRun updatedTaskRun = taskRun.withOutputs(variables);
-                    RunContext runContext = runContextFactory.of(executor.getFlow(), task, executor.getExecution().withTaskRun(updatedTaskRun), updatedTaskRun);
+                    RunContext runContext = runContextInitializer.forExecutor((DefaultRunContext) runContextFactory.of(
+                        executor.getFlow(),
+                        task,
+                        executor.getExecution().withTaskRun(updatedTaskRun),
+                        updatedTaskRun
+                    ));
                     List<NextTaskRun> next = ((FlowableTask<?>) task).resolveNexts(runContext, executor.getExecution(), updatedTaskRun);
                     Instant nextDate = waitFor.nextExecutionDate(runContext, executor.getExecution(), updatedTaskRun);
+                    updatedTaskRun = updatedTaskRun.withAssets(new AssetsInOut(
+                        Optional.ofNullable(task.getAssets()).map(AssetsDeclaration::getInputs).orElse(Collections.emptyList()),
+                        runContext.assets().outputs()
+                    ));
                      if (nextDate != null) {
                         executionDelays.add(ExecutionDelay.builder()
                             .taskRunId(taskRun.getId())
@@ -589,7 +624,10 @@ public class ExecutorService {
                 }
             } else if (task instanceof Pause pause && pause.getOnPause() != null) {
                 // if a Pause task defines an onPause, we must create a TaskRun and a WorkerTask
-                RunContext runContext = runContextFactory.of(executor.getFlow(), executor.getExecution());
+                RunContext runContext = runContextInitializer.forExecutor((DefaultRunContext) runContextFactory.of(
+                    executor.getFlow(),
+                    executor.getExecution()
+                ));
                 onPauses.add(WorkerTask.builder()
                     .runContext(runContext)
                     .taskRun(TaskRun.of(
@@ -685,7 +723,10 @@ public class ExecutorService {
 
                 if (task instanceof Pause pauseTask) {
                     if (pauseTask.getPauseDuration() != null || pauseTask.getTimeout() != null) {
-                        RunContext runContext = runContextFactory.of(executor.getFlow(), executor.getExecution());
+                        RunContext runContext = runContextInitializer.forExecutor((DefaultRunContext) runContextFactory.of(
+                            executor.getFlow(),
+                            executor.getExecution()
+                        ));
                         Duration duration = runContext.render(pauseTask.getPauseDuration()).as(Duration.class).orElse(null);
                         Duration timeout = runContext.render(pauseTask.getTimeout()).as(Duration.class).orElse(null);
                         Pause.Behavior behavior  = runContext.render(pauseTask.getBehavior()).as(Pause.Behavior.class).orElse(Pause.Behavior.RESUME);
@@ -836,7 +877,12 @@ public class ExecutorService {
             .filter(taskRun -> taskRun.getState().getCurrent().isCreated() && executor.getExecution().getFixtureForTaskRun(taskRun).isEmpty())
             .map(throwFunction(taskRun -> {
                     Task task = executor.getFlow().findTaskByTaskId(taskRun.getTaskId());
-                    RunContext runContext = runContextFactory.of(executor.getFlow(), task, executor.getExecution(), taskRun);
+                    RunContext runContext = runContextInitializer.forExecutor((DefaultRunContext) runContextFactory.of(
+                        executor.getFlow(),
+                        task,
+                        executor.getExecution(),
+                        taskRun
+                    ));
 
                     // inject the traceparent into the run context
                     textMapPropagator.ifPresent(propagator -> propagator.inject(Context.current(), runContext, RunContextTextMapSetter.INSTANCE));
@@ -895,7 +941,10 @@ public class ExecutorService {
         boolean hasMockedWorkerTask = false;
         record FixtureAndTaskRun(TaskFixture fixture, TaskRun taskRun) {}
         if (executor.getExecution().getFixtures() != null) {
-            RunContext runContext = runContextFactory.of(executor.getFlow(), executor.getExecution());
+            RunContext runContext = runContextInitializer.forExecutor((DefaultRunContext) runContextFactory.of(
+                executor.getFlow(),
+                executor.getExecution()
+            ));
             List<WorkerTaskResult> workerTaskResults = executor.getExecution()
                 .getTaskRunList()
                 .stream()
@@ -908,6 +957,10 @@ public class ExecutorService {
                             variablesService.of(StorageContext.forTask(fixtureAndTaskRun.taskRun),
                                 fixtureAndTaskRun.fixture().getOutputs() == null ? null : runContext.render(fixtureAndTaskRun.fixture().getOutputs()))
                         )
+                        .withAssets(new AssetsInOut(
+                            executor.getFlow().findTaskByTaskId(fixtureAndTaskRun.taskRun.getTaskId()).getAssets().getInputs(),
+                            fixtureAndTaskRun.fixture().getAssets() == null ? null : fixtureAndTaskRun.fixture().getAssets()
+                        ))
                     )
                     .build()
                 ))
@@ -1009,12 +1062,12 @@ public class ExecutorService {
                         return false;
                     }
 
-                    RunContext runContext = runContextFactory.of(
+                    RunContext runContext = runContextInitializer.forExecutor((DefaultRunContext) runContextFactory.of(
                         executor.getFlow(),
                         executableTask,
                         executor.getExecution(),
                         executableTaskRun
-                    );
+                    ));
                     List<SubflowExecution<?>> subflowExecutions = executableTask.createSubflowExecutions(runContext, flowExecutorInterface(), executor.getFlow(), executor.getExecution(), executableTaskRun);
                     if (subflowExecutions.isEmpty()) {
                         // if no executions we move the task to SUCCESS immediately
@@ -1111,6 +1164,10 @@ public class ExecutorService {
                             .taskRun(runningTaskRun
                                 .withAttempts(List.of(terminalAttempt))
                                 .withState(terminalState)
+                                .withAssets(new AssetsInOut(
+                                    Optional.ofNullable(workerTask.getTask().getAssets()).map(AssetsDeclaration::getInputs).orElse(Collections.emptyList()),
+                                    workerTask.getRunContext().assets().outputs()
+                                ))
                             )
                             .build()
                     );
@@ -1171,6 +1228,33 @@ public class ExecutorService {
                     metricRegistry.tags(workerTaskResult)
                 )
                 .record(taskRun.getState().getDurationOrComputeIt());
+
+            if (!taskRun.getState().isFailed() && taskRun.getAssets() != null) {
+                AssetUser assetUser = new AssetUser(
+                    taskRun.getTenantId(),
+                    taskRun.getNamespace(),
+                    taskRun.getFlowId(),
+                    newExecution.getFlowRevision(),
+                    taskRun.getExecutionId(),
+                    taskRun.getId()
+                );
+                taskRun.getAssets().getInputs().forEach(assetId ->
+                    {
+                        try {
+                            assetService.assetLineage(assetUser, assetId);
+                        } catch (QueueException e) {
+                            log.warn("Unable to submit asset lineage event for asset {}", assetId, e);
+                        }
+                    }
+                );
+                taskRun.getAssets().getOutputs().forEach(asset -> {
+                    try {
+                        assetService.asyncUpsert(assetUser, asset);
+                    } catch (QueueException e) {
+                        log.warn("Unable to submit asset upsert event for asset {}", asset.getId(), e);
+                    }
+                });
+            }
         }
     }
 
@@ -1317,7 +1401,10 @@ public class ExecutorService {
             return executor;
         }
 
-        RunContext runContext = runContextFactory.of(executor.getFlow(), executor.getExecution());
+        RunContext runContext = runContextInitializer.forExecutor((DefaultRunContext) runContextFactory.of(
+            executor.getFlow(),
+            executor.getExecution()
+        ));
         List<Violation> violations = slaService.evaluateExecutionChangedSLA(runContext, executor.getFlow(), executor.getExecution());
         if (!violations.isEmpty()) {
             metricRegistry

@@ -6,10 +6,12 @@ import com.google.common.base.CaseFormat;
 import com.google.common.collect.ImmutableMap;
 import io.kestra.core.exceptions.IllegalVariableEvaluationException;
 import io.kestra.core.metrics.MetricRegistry;
+import io.kestra.core.models.assets.AssetsDeclaration;
 import io.kestra.core.models.executions.AbstractMetricEntry;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.Task;
 import io.kestra.core.models.triggers.AbstractTrigger;
+import io.kestra.core.services.AssetManagerFactory;
 import io.kestra.core.services.KVStoreService;
 import io.kestra.core.storages.Storage;
 import io.kestra.core.storages.StorageInterface;
@@ -52,6 +54,7 @@ public class DefaultRunContext extends RunContext {
     private MetricRegistry meterRegistry;
     private VersionProvider version;
     private KVStoreService kvStoreService;
+    private AssetManagerFactory assetManagerFactory;
     private Optional<String> secretKey;
     private WorkingDir workingDir;
     private Validator validator;
@@ -70,6 +73,8 @@ public class DefaultRunContext extends RunContext {
     // those are only used to validate dynamic properties inside the RunContextProperty
     private Task task;
     private AbstractTrigger trigger;
+
+    private Assets assetsManager;
 
     private final AtomicBoolean isInitialized = new AtomicBoolean(false);
 
@@ -159,6 +164,7 @@ public class DefaultRunContext extends RunContext {
             this.secretKey = applicationContext.getProperty("kestra.encryption.secret-key", String.class);
             this.validator = applicationContext.getBean(Validator.class);
             this.localPath = applicationContext.getBean(LocalPathFactory.class).createLocalPath(this);
+            this.assetManagerFactory = applicationContext.getBean(AssetManagerFactory.class);
         }
     }
 
@@ -531,6 +537,20 @@ public class DefaultRunContext extends RunContext {
      * {@inheritDoc}
      */
     @Override
+    public ExecutionInfo executionInfo() {
+        return new ExecutionInfo(
+            (String) this.getVariables().get("executionId"),
+            Optional.ofNullable(this.getVariables().get("taskrun"))
+                .map(Map.class::cast)
+                .map(m -> (String) m.get("id"))
+                .orElse(null)
+        );
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
     @SuppressWarnings("unchecked")
     public FlowInfo flowInfo() {
         Map<String, Object> flow = (Map<String, Object>) this.getVariables().get("flow");
@@ -582,6 +602,19 @@ public class DefaultRunContext extends RunContext {
     @Override
     public AclChecker acl() {
         return new AclCheckerImpl(this.applicationContext, flowInfo());
+    }
+
+    @Override
+    public Assets assets() {
+        if (this.assetsManager == null) {
+            this.assetsManager = assetManagerFactory.of(
+                Optional.ofNullable(task).map(Task::getAssets).map(AssetsDeclaration::isEnableAuto)
+                    .or(() -> Optional.ofNullable(trigger).map(AbstractTrigger::getAssets).map(AssetsDeclaration::isEnableAuto))
+                    .orElse(true)
+            );
+        }
+
+        return this.assetsManager;
     }
 
     @Override
